@@ -1492,3 +1492,8 @@ MIT - Do whatever you want!
 **Happy Automating!** 🎊
 
 For questions or problems: Just ask Claude! 😉
+
+## Maintainer
+
+Schimmi — https://schimmilab.de
+Issues und Pull Requests willkommen.
