@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "n8n-workflow-builder"
-version = "1.23.2"
+version = "1.24.0"
 description = "Advanced MCP server for n8n workflow creation, optimization, and management"
 readme = "README.md"
 requires-python = ">=3.11"
