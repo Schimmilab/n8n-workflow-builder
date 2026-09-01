@@ -295,6 +295,50 @@ def create_n8n_server(api_url: str, api_key: str) -> Server:
                 }
             ),
             Tool(
+                name="get_workflow_history",
+                description=(
+                    "📜 List the saved versions of a workflow, newest first. "
+                    "n8n records a version each time a workflow is saved. "
+                    "Returns versionId, timestamp and authors — use "
+                    "get_workflow_version to fetch one. Requires n8n 2.36+; "
+                    "reports clearly if the instance does not allow it."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "workflow_id": {
+                            "type": "string",
+                            "description": "ID of the workflow"
+                        }
+                    },
+                    "required": ["workflow_id"]
+                }
+            ),
+            Tool(
+                name="get_workflow_version",
+                description=(
+                    "🕰️ Fetch one historic version of a workflow and compare its "
+                    "node set against the current state — which nodes existed then "
+                    "and are gone, which were added since. Answers 'what changed', "
+                    "not just 'what did it look like'. Note: only node NAMES are "
+                    "compared, not their parameters."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "workflow_id": {
+                            "type": "string",
+                            "description": "ID of the workflow"
+                        },
+                        "version_id": {
+                            "type": "string",
+                            "description": "versionId from get_workflow_history"
+                        }
+                    },
+                    "required": ["workflow_id", "version_id"]
+                }
+            ),
+            Tool(
                 name="activate_workflow",
                 description=(
                     "▶️ Activate a workflow so its triggers start firing. "
@@ -1865,6 +1909,7 @@ def create_n8n_server(api_url: str, api_key: str) -> Server:
                 "suggest_workflow_nodes", "generate_workflow_template", "analyze_workflow",
                 "list_workflows", "create_workflow", "update_workflow", "delete_workflow",
                 "get_workflow", "get_workflow_details", "activate_workflow", "deactivate_workflow",
+                "get_workflow_history", "get_workflow_version",
                 "get_workflow_executions", "execute_workflow", "validate_workflow_structure",
                 "get_workflow_statistics", "clone_workflow"
             }

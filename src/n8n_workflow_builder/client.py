@@ -355,6 +355,46 @@ class N8nClient:
             logger.error(f"Payload sent: {json.dumps(payload, indent=2)}")
             raise Exception(f"Failed to update workflow: {error_detail}")
 
+    async def get_workflow_history(self, workflow_id: str) -> List[Dict]:
+        """List saved versions of a workflow.
+
+        n8n keeps a version each time a workflow is saved. Available since the
+        2.36 API; verified against a live instance on 2026-09-01. Each entry
+        carries versionId, createdAt, updatedAt, authors, name, description.
+        """
+        try:
+            response = await self.client.get(
+                f"{self.api_url}/api/v1/workflows/{workflow_id}/history",
+                headers=self.headers
+            )
+            response.raise_for_status()
+            payload = response.json()
+            return payload.get("data", payload) if isinstance(payload, dict) else payload
+        except httpx.HTTPStatusError as e:
+            detail = ""
+            try:
+                detail = e.response.json().get("message", "")
+            except Exception:
+                detail = e.response.text[:200]
+            raise Exception(f"{e.response.status_code}: {detail}") from e
+
+    async def get_workflow_version(self, workflow_id: str, version_id: str) -> Dict:
+        """Fetch one historic version of a workflow, including nodes and connections."""
+        try:
+            response = await self.client.get(
+                f"{self.api_url}/api/v1/workflows/{workflow_id}/{version_id}",
+                headers=self.headers
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            detail = ""
+            try:
+                detail = e.response.json().get("message", "")
+            except Exception:
+                detail = e.response.text[:200]
+            raise Exception(f"{e.response.status_code}: {detail}") from e
+
     async def _set_active(self, workflow_id: str, active: bool) -> Dict:
         """Activate or deactivate a workflow via n8n's dedicated endpoints.
 

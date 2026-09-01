@@ -36,6 +36,8 @@ class WorkflowTools(BaseTool):
             "delete_workflow": self.delete_workflow,
             "activate_workflow": self.activate_workflow,
             "deactivate_workflow": self.deactivate_workflow,
+            "get_workflow_history": self.get_workflow_history,
+            "get_workflow_version": self.get_workflow_version,
             "execute_workflow": self.execute_workflow,
             "get_executions": self.get_executions,
             "get_execution_details": self.get_execution_details,
@@ -329,6 +331,119 @@ class WorkflowTools(BaseTool):
         
         return [TextContent(type="text", text=result)]
     
+    async def get_workflow_history(self, args: dict) -> list[TextContent]:
+        """List the saved versions of a workflow, newest first."""
+        workflow_id = args.get("workflow_id")
+        if not workflow_id:
+            raise ToolError("MISSING_PARAMETER", "workflow_id is required")
+
+        try:
+            current = await self.deps.client.get_workflow(workflow_id)
+        except Exception as e:
+            if "404" in str(e) or "not found" in str(e).lower():
+                raise ToolError(
+                    "WORKFLOW_NOT_FOUND",
+                    f"Workflow '{workflow_id}' not found",
+                    details={"workflow_id": workflow_id}
+                )
+            raise ToolError("API_ERROR", f"Failed to read workflow: {str(e)}")
+
+        try:
+            versions = await self.deps.client.get_workflow_history(workflow_id)
+        except Exception as e:
+            if "403" in str(e):
+                raise ToolError(
+                    "NOT_LICENSED",
+                    "Workflow history is not available on this n8n instance "
+                    f"(the API answered: {str(e)[:120]})"
+                )
+            raise ToolError("API_ERROR", f"Failed to read history: {str(e)}")
+
+        name = current.get("name", "Unknown")
+        if not versions:
+            return [TextContent(type="text", text=(
+                f"# No version history\n\n**{name}** (`{workflow_id}`) has no saved "
+                "versions yet. n8n records one each time the workflow is saved."
+            ))]
+
+        versions = sorted(versions, key=lambda v: v.get("createdAt") or "", reverse=True)
+        out = [f"# Version History: {name}\n",
+               f"**Workflow ID:** `{workflow_id}` · **{len(versions)} version(s)**\n",
+               "| # | versionId | created | authors |",
+               "|---|---|---|---|"]
+        for i, v in enumerate(versions, 1):
+            out.append(
+                f"| {i} | `{v.get('versionId', '?')}` "
+                f"| {(v.get('createdAt') or '?')[:19].replace('T', ' ')} "
+                f"| {v.get('authors') or '—'} |"
+            )
+        out.append(
+            "\n💡 Fetch one with: "
+            f'`get_workflow_version(workflow_id="{workflow_id}", version_id="…")` '
+            "— it also reports what changed against the current state."
+        )
+        return [TextContent(type="text", text="\n".join(out))]
+
+    async def get_workflow_version(self, args: dict) -> list[TextContent]:
+        """Fetch one historic version and diff its node set against the current one.
+
+        ⛔ Deliberately more than a JSON dump: on its own, an old version answers
+        "what did it look like" but not "what changed" — and the second question
+        is the one anyone actually opens a history for.
+        """
+        workflow_id = args.get("workflow_id")
+        version_id = args.get("version_id")
+        if not workflow_id or not version_id:
+            raise ToolError("MISSING_PARAMETER", "workflow_id and version_id are required")
+
+        try:
+            old = await self.deps.client.get_workflow_version(workflow_id, version_id)
+        except Exception as e:
+            if "404" in str(e) or "not found" in str(e).lower():
+                raise ToolError(
+                    "VERSION_NOT_FOUND",
+                    f"Version '{version_id}' not found for workflow '{workflow_id}'",
+                    details={"workflow_id": workflow_id, "version_id": version_id}
+                )
+            if "403" in str(e):
+                raise ToolError("NOT_LICENSED", f"Not available on this instance: {str(e)[:120]}")
+            raise ToolError("API_ERROR", f"Failed to read version: {str(e)}")
+
+        try:
+            current = await self.deps.client.get_workflow(workflow_id)
+        except Exception:
+            current = {}
+
+        alt_nodes = {n.get("name") for n in (old.get("nodes") or [])}
+        neu_nodes = {n.get("name") for n in (current.get("nodes") or [])}
+        entfernt = sorted(alt_nodes - neu_nodes)
+        hinzu = sorted(neu_nodes - alt_nodes)
+
+        out = [f"# Workflow Version `{version_id}`\n",
+               f"**Name at the time:** {old.get('name') or current.get('name') or 'Unknown'}",
+               f"**Saved:** {(old.get('createdAt') or '?')[:19].replace('T', ' ')}",
+               f"**Authors:** {old.get('authors') or '—'}",
+               f"**Nodes in this version:** {len(alt_nodes)}\n"]
+
+        if not current:
+            out.append("⚠️ Current workflow could not be read — no comparison possible.")
+        elif not entfernt and not hinzu:
+            out.append(f"## Compared to now\n\nSame node set as the current workflow "
+                       f"({len(neu_nodes)} nodes). ⚠️ Node *parameters* are not compared — "
+                       "identical names do not prove identical content.")
+        else:
+            out.append(f"## Compared to now ({len(neu_nodes)} nodes currently)\n")
+            if entfernt:
+                out.append("**Existed then, gone now:**")
+                out += [f"- `{n}`" for n in entfernt]
+            if hinzu:
+                out.append("\n**Added since:**")
+                out += [f"- `{n}`" for n in hinzu]
+            out.append("\n⚠️ Only node *names* are compared — a renamed node looks "
+                       "like one removed plus one added.")
+
+        return [TextContent(type="text", text="\n".join(out))]
+
     async def _toggle_workflow(self, args: dict, activate: bool) -> list[TextContent]:
         """Shared implementation for activate_workflow / deactivate_workflow.
 
