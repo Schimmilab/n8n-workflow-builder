@@ -34,6 +34,8 @@ class WorkflowTools(BaseTool):
             "create_workflow": self.create_workflow,
             "update_workflow": self.update_workflow,
             "delete_workflow": self.delete_workflow,
+            "activate_workflow": self.activate_workflow,
+            "deactivate_workflow": self.deactivate_workflow,
             "execute_workflow": self.execute_workflow,
             "get_executions": self.get_executions,
             "get_execution_details": self.get_execution_details,
@@ -93,7 +95,7 @@ class WorkflowTools(BaseTool):
                 raise ToolError(
                     "WORKFLOW_NOT_FOUND",
                     f"Workflow '{workflow_id}' not found",
-                    workflow_id=workflow_id
+                    details={"workflow_id": workflow_id}
                 )
             raise ToolError("API_ERROR", f"Failed to fetch workflow: {str(e)}")
         
@@ -156,7 +158,7 @@ class WorkflowTools(BaseTool):
                 raise ToolError(
                     "WORKFLOW_NOT_FOUND",
                     f"Workflow '{workflow_id}' not found",
-                    workflow_id=workflow_id
+                    details={"workflow_id": workflow_id}
                 )
             raise ToolError("API_ERROR", f"Failed to fetch workflow: {str(e)}")
         
@@ -271,7 +273,7 @@ class WorkflowTools(BaseTool):
                 raise ToolError(
                     "WORKFLOW_NOT_FOUND",
                     f"Workflow '{workflow_id}' not found",
-                    workflow_id=workflow_id
+                    details={"workflow_id": workflow_id}
                 )
             raise ToolError("API_ERROR", f"Failed to update workflow: {str(e)}")
         
@@ -311,7 +313,7 @@ class WorkflowTools(BaseTool):
                 raise ToolError(
                     "WORKFLOW_NOT_FOUND",
                     f"Workflow '{workflow_id}' not found",
-                    workflow_id=workflow_id
+                    details={"workflow_id": workflow_id}
                 )
             raise ToolError("API_ERROR", f"Failed to delete workflow: {str(e)}")
         
@@ -327,6 +329,81 @@ class WorkflowTools(BaseTool):
         
         return [TextContent(type="text", text=result)]
     
+    async def _toggle_workflow(self, args: dict, activate: bool) -> list[TextContent]:
+        """Shared implementation for activate_workflow / deactivate_workflow.
+
+        Reports the state BEFORE and AFTER the call rather than just "success":
+        a 200 from n8n only proves the request was accepted, not that the flag
+        actually flipped.
+        """
+        workflow_id = args.get("workflow_id")
+        if not workflow_id:
+            raise ToolError("MISSING_PARAMETER", "workflow_id is required")
+
+        verb = "activate" if activate else "deactivate"
+
+        try:
+            before = await self.deps.client.get_workflow(workflow_id)
+        except Exception as e:
+            if "404" in str(e) or "not found" in str(e).lower():
+                raise ToolError(
+                    "WORKFLOW_NOT_FOUND",
+                    f"Workflow '{workflow_id}' not found",
+                    details={"workflow_id": workflow_id}
+                )
+            raise ToolError("API_ERROR", f"Failed to read workflow: {str(e)}")
+
+        was_active = bool(before.get("active"))
+        name = before.get("name", "Unknown")
+
+        if was_active == activate:
+            return [TextContent(type="text", text=(
+                f"# No change needed\n\n"
+                f"**{name}** (`{workflow_id}`) is already "
+                f"{'active' if activate else 'inactive'}. Nothing was sent to n8n."
+            ))]
+
+        try:
+            if activate:
+                await self.deps.client.activate_workflow(workflow_id)
+            else:
+                await self.deps.client.deactivate_workflow(workflow_id)
+        except Exception as e:
+            raise ToolError("API_ERROR", f"Failed to {verb} workflow: {str(e)}")
+
+        after = await self.deps.client.get_workflow(workflow_id)
+        is_active = bool(after.get("active"))
+
+        if is_active != activate:
+            raise ToolError(
+                "STATE_NOT_APPLIED",
+                f"n8n accepted the {verb} request but the workflow is still "
+                f"{'active' if is_active else 'inactive'}. Nothing was changed.",
+                details={"workflow_id": workflow_id}
+            )
+
+        self.deps.state_manager.log_action(f"{verb}_workflow", {
+            "workflow_id": workflow_id,
+            "workflow_name": name,
+            "active_before": was_active,
+            "active_after": is_active
+        })
+
+        return [TextContent(type="text", text=(
+            f"# Workflow {'Activated' if activate else 'Deactivated'}\n\n"
+            f"**Name:** {name}\n"
+            f"**ID:** `{workflow_id}`\n"
+            f"**active:** {was_active} → {is_active}\n\n"
+            + ("⚠️ Its triggers are now live."
+               if activate else "The workflow no longer reacts to its triggers.")
+        ))]
+
+    async def activate_workflow(self, args: dict) -> list[TextContent]:
+        return await self._toggle_workflow(args, activate=True)
+
+    async def deactivate_workflow(self, args: dict) -> list[TextContent]:
+        return await self._toggle_workflow(args, activate=False)
+
     async def execute_workflow(self, args: dict) -> list[TextContent]:
         """Execute a workflow"""
         workflow_id = args["workflow_id"]
@@ -339,7 +416,7 @@ class WorkflowTools(BaseTool):
                 raise ToolError(
                     "WORKFLOW_NOT_FOUND",
                     f"Workflow '{workflow_id}' not found",
-                    workflow_id=workflow_id
+                    details={"workflow_id": workflow_id}
                 )
             raise ToolError("API_ERROR", f"Failed to execute workflow: {str(e)}")
         
@@ -524,7 +601,7 @@ class WorkflowTools(BaseTool):
                 raise ToolError(
                     "WORKFLOW_NOT_FOUND",
                     f"Workflow '{workflow_id}' not found",
-                    workflow_id=workflow_id
+                    details={"workflow_id": workflow_id}
                 )
             raise ToolError("API_ERROR", f"Failed to fetch workflow: {str(e)}")
         

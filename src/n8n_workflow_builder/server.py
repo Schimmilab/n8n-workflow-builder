@@ -295,6 +295,44 @@ def create_n8n_server(api_url: str, api_key: str) -> Server:
                 }
             ),
             Tool(
+                name="activate_workflow",
+                description=(
+                    "▶️ Activate a workflow so its triggers start firing. "
+                    "Uses n8n's dedicated POST /workflows/{id}/activate endpoint — "
+                    "the 'active' field is read-only via update_workflow. "
+                    "Reports the active state before and after, and fails loudly "
+                    "if n8n accepted the request without the flag actually flipping."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "workflow_id": {
+                            "type": "string",
+                            "description": "ID of the workflow to activate"
+                        }
+                    },
+                    "required": ["workflow_id"]
+                }
+            ),
+            Tool(
+                name="deactivate_workflow",
+                description=(
+                    "⏸️ Deactivate a workflow so its triggers stop firing. "
+                    "Uses n8n's dedicated POST /workflows/{id}/deactivate endpoint. "
+                    "Reports the active state before and after."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "workflow_id": {
+                            "type": "string",
+                            "description": "ID of the workflow to deactivate"
+                        }
+                    },
+                    "required": ["workflow_id"]
+                }
+            ),
+            Tool(
                 name="execute_workflow",
                 description=(
                     "▶️ Execute a workflow with optional input data. "

@@ -355,6 +355,40 @@ class N8nClient:
             logger.error(f"Payload sent: {json.dumps(payload, indent=2)}")
             raise Exception(f"Failed to update workflow: {error_detail}")
 
+    async def _set_active(self, workflow_id: str, active: bool) -> Dict:
+        """Activate or deactivate a workflow via n8n's dedicated endpoints.
+
+        n8n's PATCH /workflows/{id} treats `active` as read-only — the only way
+        to toggle it through the API is POST /workflows/{id}/activate resp.
+        /deactivate. Verified against the live instance on 2026-09-01: an
+        invented route returns 405, while these return 404 with a domain
+        message ("You do not have permission to activate this workflow"),
+        which is what proves the routes exist.
+        """
+        verb = "activate" if active else "deactivate"
+        try:
+            response = await self.client.post(
+                f"{self.api_url}/api/v1/workflows/{workflow_id}/{verb}",
+                headers=self.headers
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            detail = ""
+            try:
+                detail = e.response.json().get("message", "")
+            except Exception:
+                detail = e.response.text[:200]
+            raise Exception(f"{e.response.status_code}: {detail}") from e
+
+    async def activate_workflow(self, workflow_id: str) -> Dict:
+        """Activate a workflow (its triggers start firing)."""
+        return await self._set_active(workflow_id, True)
+
+    async def deactivate_workflow(self, workflow_id: str) -> Dict:
+        """Deactivate a workflow (its triggers stop firing)."""
+        return await self._set_active(workflow_id, False)
+
     async def delete_workflow(self, workflow_id: str) -> Dict:
         """Delete (archive) a workflow
 
