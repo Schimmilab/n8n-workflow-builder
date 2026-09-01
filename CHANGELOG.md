@@ -5,6 +5,26 @@ All notable changes to the n8n Workflow Builder MCP Server will be documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.25.1] - 2026-09-01
+
+### 📝 Documentation
+
+- **README brought back in sync.** After two releases in one evening it still named **v1.23.1 from 2026-03-14** and none of the four new tools. Updated: latest release, the activate/deactivate and version-history capabilities, the API endpoints actually used, and a `Tool Names` section — the prose descriptions alone were not findable by tool name.
+
+### 🛠️ Added
+
+- **`scripts/release-preflight.py`** — checks before tagging that the docs match the code:
+  - CHANGELOG entry and `releases/vX.Y.Z.md` exist for the current version
+  - README names the current version
+  - ⭐ **every tool defined in `server.py` appears somewhere in the README**
+  - `--selftest` with 6 cases, 5 of them negative
+
+### 📌 Why a script and not more care
+
+This was the **second instance of the same failure in three days** — on 2026-08-29 the `oura-mcp-server` README was three minor versions behind. A rule that breaks twice is not a discipline problem.
+
+⚠️ 39 tools have never been in the README. They sit in `scripts/readme-luecken-bekannt.txt` as a baseline so the check reports what is **newly** missing — a preflight that prints 39 lines gets ignored after the second release. The four tools that caused this are deliberately **not** on that list: a baseline that silences its own triggering case abolishes itself.
+
 ## [1.25.0] - 2026-09-01
 
 ### ✨ Added

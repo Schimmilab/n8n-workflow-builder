@@ -2,7 +2,7 @@
 
 An **awesome** MCP server for n8n that helps you build, optimize, and debug workflows - directly from Claude! 🎯
 
-**Latest Release:** [v1.23.1](releases/v1.23.1.md) (2026-03-14) - Critical Bugfix Release 🐛
+**Latest Release:** [v1.25.1](releases/v1.25.1.md) (2026-09-01) - Docs in sync + release preflight 📝
 
 ## 🌟 Features
 
@@ -23,7 +23,13 @@ An **awesome** MCP server for n8n that helps you build, optimize, and debug work
 - **Workflow Creation**: Create new workflows from scratch or templates
 - **Workflow Editing**: Smart merge updates - change names, modify nodes, adjust settings
   - ✨ **NEW**: Intelligent node merging prevents accidental data loss (v1.13.2)
-  - ⚠️ Note: `active` and `tags` fields are read-only and can only be changed in the n8n UI
+  - ⚠️ Note: `tags` are read-only via update and can only be changed in the n8n UI
+- **Activate / Deactivate**: Turn a workflow's triggers on and off (v1.24.0)
+    - Uses n8n's dedicated `/activate` and `/deactivate` endpoints — `active` cannot be set via update
+    - Reports the state before and after, and fails loudly if n8n accepts the request without the flag flipping
+- **Version History**: List saved versions and fetch any earlier one (v1.25.0, needs n8n 2.36+)
+    - `get_workflow_version` also diffs the old node set against the current one
+    - ⚠️ Only node *names* are compared, not their parameters
 - **Workflow Deletion**: Delete/archive workflows safely (v1.14.0)
 
 ### ⚡ Workflow Execution & Monitoring
@@ -1330,6 +1336,21 @@ WORKFLOW_TEMPLATES["my_template"] = {
 }
 ```
 
+## 🧰 Tool Names
+
+Recently added (the full capability list is above):
+
+| Tool | Since | What it does |
+|---|---|---|
+| `activate_workflow` | v1.24.0 | Turn a workflow's triggers on |
+| `deactivate_workflow` | v1.24.0 | Turn them off again |
+| `get_workflow_history` | v1.25.0 | List saved versions, newest first |
+| `get_workflow_version` | v1.25.0 | Fetch one version + diff against current |
+
+⚠️ `activate_workflow` and `deactivate_workflow` exist because n8n treats `active`
+as read-only on update — the only way through the API are its dedicated
+`/activate` and `/deactivate` endpoints.
+
 ## 📊 API Reference
 
 The server uses the official n8n REST API:
@@ -1342,6 +1363,10 @@ Used endpoints:
 - `POST /workflows` - Create workflow
 - `PUT /workflows/{id}` - Update workflow
 - `POST /workflows/{id}/run` - Execute workflow
+- `POST /workflows/{id}/activate` - Activate a workflow
+- `POST /workflows/{id}/deactivate` - Deactivate a workflow
+- `GET /workflows/{id}/history` - List saved versions (n8n 2.36+)
+- `GET /workflows/{id}/{versionId}` - Fetch one earlier version (n8n 2.36+)
 - `GET /executions` - Get execution history
 - `GET /executions/{id}` - Get execution details
 
